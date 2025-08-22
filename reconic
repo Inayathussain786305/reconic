@@ -1,47 +1,60 @@
 #!/bin/bash
 
 # Reconic - Hunt. Detect. Exploit.
-# Author: Inayat Hussain (Security Researcher)
+# Author: Inayat Hussain (Pakistani Security Researcher)
 
 GREEN="\033[1;32m"
 RED="\033[1;31m"
 RESET="\033[0m"
 
-TOOLS=(subfinder httpx gau nuclei qsreplace)
+TOOLS=(subfinder httpx gau nuclei qsreplace jq)
 
 banner() {
     echo -e "${GREEN}"
-    echo "    ____                          _     "
-    echo "   |  _ \ ___  ___ ___  _ __ ___| |__  "
-    echo "   | |_) / _ \/ __/ _ \| '__/ __| '_ \ "
-    echo "   |  _ <  __/ (_| (_) | | | (__| | | |"
-    echo "   |_| \_\___|\___\___/|_|  \___|_| |_|"
-    echo "       Reconic - Hunt. Detect. Exploit."
+    echo "   ____                          _        "
+    echo "  |  _ \ ___  ___ ___   ___  ___(_) ___   "
+    echo "  | |_) / _ \/ __/ _ \ / _ \/ __| |/ __|  "
+    echo "  |  _ <  __/ (_| (_) |  __/\__ \ | (__   "
+    echo "  |_| \_\___|\___\___/ \___||___/_|\___|  "
+    echo
+    echo "        Reconic - Hunt. Detect. Exploit. "
+    echo "        Author: Inayat Hussain (Pakistani Security Researcher)"
     echo -e "${RESET}"
 }
 
 install_requirements() {
     echo -e "${GREEN}[*] Checking and installing required tools...${RESET}"
 
+    # Install Go if missing
     if ! command -v go >/dev/null 2>&1; then
         echo -e "${RED}[!] Go is not installed. Trying to install...${RESET}"
         sudo apt update && sudo apt install golang -y
         export PATH=$PATH:/usr/local/go/bin
     fi
 
+    # Install required tools
     for tool in "${TOOLS[@]}"; do
         if ! command -v "$tool" >/dev/null 2>&1; then
             echo -e "${RED}[-] $tool not found. Installing...${RESET}"
-            go install github.com/projectdiscovery/$tool/cmd/$tool@latest
-            export PATH=$PATH:$(go env GOPATH)/bin
+            if [[ "$tool" == "jq" ]]; then
+                sudo apt update && sudo apt install jq -y
+            else
+                go install github.com/projectdiscovery/$tool/cmd/$tool@latest
+                export PATH=$PATH:$(go env GOPATH)/bin
+            fi
         else
             echo -e "${GREEN}[+] $tool is already installed.${RESET}"
         fi
     done
 
-    if ! command -v jq >/dev/null 2>&1; then
-        echo -e "${RED}[-] jq not found. Installing...${RESET}"
-        sudo apt update && sudo apt install jq -y
+    # Update nuclei binary & templates
+    echo -e "${GREEN}[*] Updating nuclei and templates...${RESET}"
+    nuclei -update
+    nuclei -ut
+    if [ ! -d "$HOME/nuclei-templates" ]; then
+        git clone https://github.com/projectdiscovery/nuclei-templates.git "$HOME/nuclei-templates"
+    else
+        (cd "$HOME/nuclei-templates" && git pull)
     fi
 }
 
@@ -93,9 +106,11 @@ for domain in "${domains[@]}"; do
     echo -e "${GREEN}[i] Found $PARAM_COUNT parameterized URLs.${RESET}"
 
     echo -e "${GREEN}[*] Running nuclei scan (this may take a while)...${RESET}"
-    nuclei -l "$LIVE_FILE" -severity low,medium,high,critical | tee "$VULNS_FILE"
+    nuclei -l "$LIVE_FILE" \
+           -t "$HOME/nuclei-templates" \
+           -severity low,medium,high,critical \
+           -o "$VULNS_FILE"
 
     echo -e "${GREEN}[✔] Done with $domain. Output stored in $OUTPUT_DIR${RESET}"
     echo
 done
-
