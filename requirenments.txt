@@ -1,0 +1,7 @@
+go >= 1.22
+subfinder
+httpx
+gau
+nuclei
+qsreplace
+jq
