@@ -1,116 +1,282 @@
-#!/bin/bash
-
-# Reconic - Hunt. Detect. Exploit.
+#!/usr/bin/env bash
+# Reconic - Hunt. Detect. Exploit. (fixed)
 # Author: Inayat Hussain (Pakistani Security Researcher)
+# --------------------------------------------
+
+set -euo pipefail
+IFS=$'\n\t'
 
 GREEN="\033[1;32m"
+YELLOW="\033[1;33m"
 RED="\033[1;31m"
 RESET="\033[0m"
 
-TOOLS=(subfinder httpx gau nuclei qsreplace jq)
-
 banner() {
     echo -e "${GREEN}"
-    echo "   ____                          _        "
-    echo "  |  _ \ ___  ___ ___   ___  ___(_) ___   "
-    echo "  | |_) / _ \/ __/ _ \ / _ \/ __| |/ __|  "
-    echo "  |  _ <  __/ (_| (_) |  __/\__ \ | (__   "
-    echo "  |_| \_\___|\___\___/ \___||___/_|\___|  "
-    echo
-    echo "        Reconic - Hunt. Detect. Exploit. "
-    echo "        Author: Inayat Hussain (Pakistani Security Researcher)"
+    cat <<'B'
+   ____                          _        
+  |  _ \ ___  ___ ___   ___  ___(_) ___   
+  | |_) / _ \/ __/ _ \ / _ \/ __| |/ __|  
+  |  _ <  __/ (_| (_) |  __/\__ \ | (__   
+  |_| \_\___|\___\___/ \___||___/_|\___|  
+
+        Reconic - Hunt. Detect. Exploit.
+        Author: Inayat Hussain (Pakistani Security Researcher)
+B
     echo -e "${RESET}"
 }
 
-install_requirements() {
-    echo -e "${GREEN}[*] Checking and installing required tools...${RESET}"
+# tool -> go module mapping (precise where necessary)
+declare -A TOOL_MODULES=(
+    [subfinder]="github.com/projectdiscovery/subfinder/v2/cmd/subfinder"
+    [httpx]="github.com/projectdiscovery/httpx/cmd/httpx"
+    [gau]="github.com/lc/gau/v2/cmd/gau"
+    [nuclei]="github.com/projectdiscovery/nuclei/v2/cmd/nuclei"
+    [qsreplace]="github.com/tomnomnom/qsreplace"
+    # jq is handled via apt/distro package below
+)
 
-    # Install Go if missing
-    if ! command -v go >/dev/null 2>&1; then
-        echo -e "${RED}[!] Go is not installed. Trying to install...${RESET}"
-        sudo apt update && sudo apt install golang -y
-        export PATH=$PATH:/usr/local/go/bin
+REQUIRED_PKGS=(jq git curl)
+
+# ensure Go-based binaries get installed into a writable bin and we export PATH for this run
+add_gobin_to_path() {
+    local gobin
+    gobin="$(go env GOBIN 2>/dev/null || true)"
+    if [ -z "$gobin" ]; then
+        local gopath
+        gopath="$(go env GOPATH 2>/dev/null || true)"
+        if [ -n "$gopath" ]; then
+            gobin="$gopath/bin"
+        else
+            gobin="$HOME/go/bin"
+        fi
+    fi
+    mkdir -p "$gobin"
+    export PATH="$gobin:$PATH"
+}
+
+install_go_tool() {
+    local bin="$1"
+    local mod="$2"
+
+    if command -v "$bin" &>/dev/null; then
+        echo -e "${GREEN}[+] $bin is already installed${RESET}"
+        return 0
     fi
 
-    # Install required tools
-    for tool in "${TOOLS[@]}"; do
-        if ! command -v "$tool" >/dev/null 2>&1; then
-            echo -e "${RED}[-] $tool not found. Installing...${RESET}"
-            if [[ "$tool" == "jq" ]]; then
-                sudo apt update && sudo apt install jq -y
-            else
-                go install github.com/projectdiscovery/$tool/cmd/$tool@latest
-                export PATH=$PATH:$(go env GOPATH)/bin
-            fi
-        else
-            echo -e "${GREEN}[+] $tool is already installed.${RESET}"
-        fi
-    done
+    if ! command -v go &>/dev/null; then
+        echo -e "${YELLOW}[!] go not found — skipping auto-install of $bin. Install Go to enable auto-install.${RESET}"
+        return 1
+    fi
 
-    # Update nuclei binary & templates
-    echo -e "${GREEN}[*] Updating nuclei and templates...${RESET}"
-    nuclei -update
-    nuclei -ut
-    if [ ! -d "$HOME/nuclei-templates" ]; then
-        git clone https://github.com/projectdiscovery/nuclei-templates.git "$HOME/nuclei-templates"
+    add_gobin_to_path
+
+    echo -e "${YELLOW}[*] Installing $bin from $mod ...${RESET}"
+    if go install "${mod}@latest"; then
+        echo -e "${GREEN}[+] Installed $bin (temporary PATH updated).${RESET}"
+        return 0
     else
-        (cd "$HOME/nuclei-templates" && git pull)
+        echo -e "${RED}[!] Failed to install $bin from $mod. Please install it manually.${RESET}"
+        return 1
     fi
 }
 
-# Main Script Start
-if [ -z "$1" ]; then
-    echo -e "${RED}[!] Usage: $0 <domain.com or targets.txt>${RESET}"
+install_requirements() {
+    echo -e "${GREEN}[*] Checking & installing required packages/tools...${RESET}"
+
+    # install small distro packages first (jq/git/curl)
+    if command -v apt-get &>/dev/null; then
+        for pkg in "${REQUIRED_PKGS[@]}"; do
+            if ! command -v "$pkg" &>/dev/null; then
+                echo -e "${YELLOW}[+] Installing system package: $pkg${RESET}"
+                sudo apt-get update -y && sudo apt-get install -y "$pkg" || echo -e "${YELLOW}[!] Failed to install $pkg via apt, continue...${RESET}"
+            fi
+        done
+    else
+        echo -e "${YELLOW}[!] apt-get not found; ensure jq/git/curl are available manually.${RESET}"
+    fi
+
+    # install Go if missing (best-effort via apt for Debian/Ubuntu)
+    if ! command -v go &>/dev/null; then
+        if command -v apt-get &>/dev/null; then
+            echo -e "${YELLOW}[+] Installing golang via apt (best-effort)...${RESET}"
+            sudo apt-get update -y && sudo apt-get install -y golang || echo -e "${YELLOW}[!] golang install via apt failed; please install Go manually.${RESET}"
+            add_gobin_to_path
+        else
+            echo -e "${YELLOW}[!] go not found and apt-get unavailable. Please install Go manually to auto-install Go-based tools.${RESET}"
+        fi
+    fi
+
+    # install each Go-based tool using precise module mapping
+    for tool in "${!TOOL_MODULES[@]}"; do
+        install_go_tool "$tool" "${TOOL_MODULES[$tool]}" || echo -e "${YELLOW}[!] continuing despite failed install of $tool${RESET}"
+    done
+
+    # ensure jq is installed (if apt failed earlier)
+    if ! command -v jq &>/dev/null; then
+        echo -e "${YELLOW}[!] jq not available. Please install jq (apt/yum/pacman) for JSON handling.${RESET}"
+    fi
+
+    # nuclei template updates (best-effort; don't fail script if these fail)
+    if command -v nuclei &>/dev/null; then
+        echo -e "${GREEN}[*] Updating nuclei binary & templates (best-effort)...${RESET}"
+        # Try several update commands that might exist across versions; ignore failures
+        nuclei -update-templates 2>/dev/null || nuclei -ut 2>/dev/null || nuclei -update 2>/dev/null || echo -e "${YELLOW}[!] nuclei update commands failed or unsupported on this version.${RESET}"
+
+        # ensure nuclei-templates repo present for -t usage (best-effort)
+        if [ ! -d "$HOME/nuclei-templates" ]; then
+            if command -v git &>/dev/null; then
+                git clone https://github.com/projectdiscovery/nuclei-templates.git "$HOME/nuclei-templates" 2>/dev/null || echo -e "${YELLOW}[!] Failed to clone nuclei-templates; continuing...${RESET}"
+            fi
+        else
+            (cd "$HOME/nuclei-templates" && git pull --ff-only 2>/dev/null) || true
+        fi
+    else
+        echo -e "${YELLOW}[!] nuclei not installed — skipping nuclei template updates.${RESET}"
+    fi
+}
+
+usage_and_exit() {
+    echo -e "${RED}[!] Usage: $0 <domain.com>  OR  $0 <targets.txt>${RESET}"
     exit 1
+}
+
+# ---------- MAIN ----------
+if [ "${#}" -lt 1 ]; then
+    usage_and_exit
 fi
 
 banner
 install_requirements
 
-INPUT=$1
-DATE=$(date +"%Y-%m-%d_%H-%M")
-OUTPUT_DIR="reconic_output_$DATE"
+INPUT="$1"
+DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
+OUTPUT_DIR="reconic_output_${DATE}"
 mkdir -p "$OUTPUT_DIR"
 
 domains=()
-
-if [[ -f "$INPUT" ]]; then
+if [ -f "$INPUT" ]; then
     mapfile -t domains < "$INPUT"
 else
     domains+=("$INPUT")
 fi
 
 for domain in "${domains[@]}"; do
-    echo -e "${GREEN}[+] Starting recon for $domain${RESET}"
+    echo -e "${GREEN}[+] Starting recon for: ${domain}${RESET}"
 
-    SUBS_FILE="$OUTPUT_DIR/${domain}_subs.txt"
-    LIVE_FILE="$OUTPUT_DIR/${domain}_live.txt"
-    URLS_FILE="$OUTPUT_DIR/${domain}_urls.txt"
-    PARAMS_FILE="$OUTPUT_DIR/${domain}_params.txt"
-    VULNS_FILE="$OUTPUT_DIR/${domain}_vulns.txt"
+    safe_name="$(echo "$domain" | tr '/' '_' | tr ':' '_')"
+    SUBS_FILE="$OUTPUT_DIR/${safe_name}_subs.txt"
+    LIVE_FILE="$OUTPUT_DIR/${safe_name}_live.txt"
+    URLS_FILE="$OUTPUT_DIR/${safe_name}_urls.txt"
+    PARAMS_FILE="$OUTPUT_DIR/${safe_name}_params.txt"
+    VULNS_FILE="$OUTPUT_DIR/${safe_name}_vulns.txt"
 
-    echo -e "${GREEN}[*] Enumerating subdomains...${RESET}"
-    subfinder -d "$domain" -silent | tee "$SUBS_FILE"
+    # 1) subfinder
+    echo -e "${GREEN}[*] Enumerating subdomains with subfinder...${RESET}"
+    if command -v subfinder &>/dev/null; then
+        subfinder -d "$domain" -silent | sort -u | tee "$SUBS_FILE" || true
+    else
+        echo -e "${YELLOW}[!] subfinder not installed; skipping subdomain enumeration.${RESET}"
+        : > "$SUBS_FILE"
+    fi
 
-    echo -e "${GREEN}[*] Probing for live hosts...${RESET}"
-    httpx -silent -l "$SUBS_FILE" | tee "$LIVE_FILE"
-    LIVE_COUNT=$(wc -l < "$LIVE_FILE")
-    echo -e "${GREEN}[i] Found $LIVE_COUNT live hosts.${RESET}"
+    # ensure SUBS_FILE has content before continuing, otherwise use domain itself
+    if [ ! -s "$SUBS_FILE" ]; then
+        echo -e "${YELLOW}[!] No subdomains found; using provided domain as target.${RESET}"
+        echo "$domain" > "$SUBS_FILE"
+    fi
 
-    echo -e "${GREEN}[*] Gathering URLs from gau...${RESET}"
-    cat "$LIVE_FILE" | gau --threads 5 | tee "$URLS_FILE"
+    # 2) httpx - probe live hosts
+    echo -e "${GREEN}[*] Probing for live hosts with httpx...${RESET}"
+    if command -v httpx &>/dev/null; then
+        # -silent flag may vary; use -silent if supported; otherwise use -status-code to force output
+        # We guard against empty file input
+        if [ -s "$SUBS_FILE" ]; then
+            httpx -l "$SUBS_FILE" -silent -o "$LIVE_FILE" 2>/dev/null || httpx -l "$SUBS_FILE" -o "$LIVE_FILE" 2>/dev/null || true
+        else
+            : > "$LIVE_FILE"
+        fi
+    else
+        echo -e "${YELLOW}[!] httpx not installed; skipping live probe.${RESET}"
+        : > "$LIVE_FILE"
+    fi
 
-    echo -e "${GREEN}[*] Extracting endpoints with parameters...${RESET}"
-    cat "$URLS_FILE" | grep "=" | qsreplace -a | sort -u | tee "$PARAMS_FILE"
-    PARAM_COUNT=$(wc -l < "$PARAMS_FILE")
-    echo -e "${GREEN}[i] Found $PARAM_COUNT parameterized URLs.${RESET}"
+    if [ ! -s "$LIVE_FILE" ]; then
+        # fallback: if httpx produced no output, use subdomains as live list
+        echo -e "${YELLOW}[!] No live hosts discovered by httpx; using subdomains list as live targets.${RESET}"
+        cp -f "$SUBS_FILE" "$LIVE_FILE"
+    fi
 
-    echo -e "${GREEN}[*] Running nuclei scan (this may take a while)...${RESET}"
-    nuclei -l "$LIVE_FILE" \
-           -t "$HOME/nuclei-templates" \
-           -severity low,medium,high,critical \
-           -o "$VULNS_FILE"
+    LIVE_COUNT=$(wc -l < "$LIVE_FILE" 2>/dev/null || echo 0)
+    echo -e "${GREEN}[i] Found ${LIVE_COUNT} live targets.${RESET}"
 
-    echo -e "${GREEN}[✔] Done with $domain. Output stored in $OUTPUT_DIR${RESET}"
+    # 3) gau to collect urls
+    echo -e "${GREEN}[*] Gathering URLs with gau...${RESET}"
+    if command -v gau &>/dev/null; then
+        if [ -s "$LIVE_FILE" ]; then
+            # suppress gau stderr (config warnings) and use small thread count to be safe
+            gau --threads 5 -o "$URLS_FILE" < "$LIVE_FILE" 2>/dev/null || gau -o "$URLS_FILE" < "$LIVE_FILE" 2>/dev/null || true
+            # if gau wrote nothing, try waybackurls as fallback (if available)
+            if [ ! -s "$URLS_FILE" ] && command -v waybackurls &>/dev/null; then
+                echo -e "${YELLOW}[!] gau produced no URLs; trying waybackurls fallback...${RESET}"
+                waybackurls "$domain" > "$URLS_FILE" || true
+            fi
+        else
+            : > "$URLS_FILE"
+        fi
+    else
+        echo -e "${YELLOW}[!] gau not installed; skipping URL gathering.${RESET}"
+        : > "$URLS_FILE"
+    fi
+
+    # 4) extract parameterized endpoints
+    echo -e "${GREEN}[*] Extracting parameterized endpoints...${RESET}"
+    if [ -s "$URLS_FILE" ]; then
+        # keep only unique param URLs (contain '=')
+        grep -E "=" "$URLS_FILE" | qsreplace -a 2>/dev/null | sort -u > "$PARAMS_FILE" || grep -E "=" "$URLS_FILE" | sort -u > "$PARAMS_FILE" || true
+    else
+        : > "$PARAMS_FILE"
+    fi
+
+    PARAM_COUNT=$(wc -l < "$PARAMS_FILE" 2>/dev/null || echo 0)
+    echo -e "${GREEN}[i] Found ${PARAM_COUNT} parameterized URLs.${RESET}"
+
+    # 5) run nuclei (only if we have live targets or params)
+    echo -e "${GREEN}[*] Running nuclei scan (best-effort; will skip if no targets)...${RESET}"
+    if command -v nuclei &>/dev/null; then
+        # prefer scanning live URLs list (HTTP endpoints), but ensure it's non-empty
+        if [ -s "$LIVE_FILE" ]; then
+            # Use templates dir if available, otherwise rely on nuclei's internal templates
+            NUCLEI_TEMPLATES_DIR="$HOME/nuclei-templates"
+            nuclei_cmd=(nuclei)
+
+            # build args safely (avoid empty variables)
+            nuclei_args=()
+            nuclei_args+=("-l" "$LIVE_FILE")
+            if [ -d "$NUCLEI_TEMPLATES_DIR" ]; then
+                nuclei_args+=("-t" "$NUCLEI_TEMPLATES_DIR")
+            fi
+            # severity accepts comma-separated; only pass when desired
+            nuclei_args+=("-severity" "low,medium,high,critical")
+            nuclei_args+=("-o" "$VULNS_FILE")
+
+            # run nuclei with constructed args; ensure exit codes do not kill the whole script
+            if ! "${nuclei_cmd[@]}" "${nuclei_args[@]}" 2>"$OUTPUT_DIR/nuclei-stderr.log"; then
+                echo -e "${YELLOW}[!] nuclei returned non-zero exit code; check $OUTPUT_DIR/nuclei-stderr.log for details. Continuing...${RESET}"
+            else
+                echo -e "${GREEN}[+] nuclei scan finished. Showing top 10 findings (if any):${RESET}"
+                head -n 10 "$VULNS_FILE" || true
+            fi
+        else
+            echo -e "${YELLOW}[!] No live targets to run nuclei against; skipping nuclei for this domain.${RESET}"
+        fi
+    else
+        echo -e "${YELLOW}[!] nuclei not installed; skipping nuclei scan.${RESET}"
+    fi
+
+    echo -e "${GREEN}[✔] Done with ${domain}. Output stored in: ${OUTPUT_DIR}${RESET}"
     echo
 done
+
+echo -e "${GREEN}[✓] All done. Check ${OUTPUT_DIR} for results.${RESET}"
+
