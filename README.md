@@ -1,8 +1,6 @@
-# reconic
-All-in-one Bash-based reconnaissance framework for bug bounty hunters – includes Subfinder, Httpx, Nuclei, and more.
 # 🛰️ Reconic – Advanced Recon Framework for Bug Bounty Hunters 🕵️‍♂️
 
-**Reconic** is a powerful, modular Bash-based reconnaissance toolkit built for ethical hackers and bug bounty hunters. It automates and integrates best-in-class tools like `subfinder`, `httpx`, `nuclei`, `assetfinder`, and more — all in one script. Designed to give hackers a fast and structured way to collect attack surface data with minimal resources.
+**Reconic** is a powerful, modular Bash-based reconnaissance toolkit built for ethical hackers and bug bounty hunters. It automates and integrates best-in-class tools like `subfinder`, `httpx`, `nuclei`, `assetfinder`, and more all in one script. Designed to give hackers a fast and structured way to collect attack surface data with minimal resources.
 
 ---
 
