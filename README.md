@@ -6,29 +6,29 @@
 
 ## ⚙️ Tools Integrated
 
-- 🕸️ `subfinder` – Subdomain enumeration
-- 🛰️ `assetfinder` – Asset discovery
-- 🌐 `httpx` – Probes live domains
-- 🧠 `nuclei` – Vulnerability scanning with customizable templates
-- 🧪 `dnsx` – DNS resolution
-- 🔎 `waybackurls` – Collect archived endpoints
-- 🛡️ `gf` – Pattern matching on fuzzable parameters
-- 🔐 And many more...
+   `subfinder` – Subdomain enumeration
+    assetfinder` – Asset discovery
+   `httpx` – Probes live domains
+   `nuclei` – Vulnerability scanning with customizable templates
+   `dnsx` – DNS resolution
+    `waybackurls` – Collect archived endpoints
+    `gf` – Pattern matching on fuzzable parameters
+    And many more...
 
 ---
 
-## 🌟 Features
+##  Features
 
-- 🔁 One-click recon pipeline
-- ⚙️ Modular design – add or remove tools
-- ⚡ Works fast even on low-spec systems (like 4GB RAM)
-- 🧾 Creates clean and categorized output files
-- 🕵️ Optimized for HackerOne/BBP methodologies
-- 🧰 Bash-native — portable, no heavy setup required
+    One-click recon pipeline
+    Modular design – add or remove tools
+    Works fast even on low-spec systems (like 4GB RAM)
+    Creates clean and categorized output files
+    Optimized for HackerOne/BBP methodologies
+    Bash-native — portable, no heavy setup required
 
 ---
 
-## 🛠️ How to Use
+##  How to Use
 
 1. Make it executable:
    ```bash
@@ -67,25 +67,24 @@ output/
 
 📌 Use Cases
 
-    🔍 Bug bounty recon automation
+      Bug bounty recon automation
 
-    🛠️ Pentest prep for web targets
+      Pentest prep for web targets
 
-    🧠 Learning recon workflows
+     Learning recon workflows
 
-    ⚡ Quick recon on new programs
+      Quick recon on new programs
 
 👤 Author
 
 Inayat Hussain (Inayat Raj Chohan)
-🛡️ Cybersecurity Researcher | Bash Developer | Bug Bounty Hunter
-🔗 LinkedIn – Inayat Hussain Chohan
-📘 Facebook: Inayat Raj Chohan
-🐙 GitHub: https://github.com/your-github-username
+  Cybersecurity Researcher | Bash Developer | Bug Bounty Hunter
+  LinkedIn – Inayat Hussain Chohan
+ Facebook: Inayat Raj Chohan
 ⚠️ Legal Disclaimer
 
 This tool is for authorized testing and educational purposes only. Do not use Reconic on systems you don’t own or have explicit permission to test.
-🙌 Support My Work
+  Support My Work
 
     ⭐ Star this repo
 
@@ -93,7 +92,7 @@ This tool is for authorized testing and educational purposes only. Do not use Re
 
     🗣️ Send feedback and feature requests
 
-Let’s build the ultimate recon tool together 💻🔥
+Let’s build the ultimate recon tool together 
 
 
 ---
